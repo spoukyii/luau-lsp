@@ -7,6 +7,8 @@
 #include "Luau/TimeTrace.h"
 #include "LuauFileUtils.hpp"
 
+#include <algorithm>
+
 LUAU_FASTFLAG(LuauSolverV2)
 
 static std::optional<Luau::TypeId> getTypeIdForClass(const Luau::ScopePtr& globalScope, std::optional<std::string> className)
@@ -505,13 +507,40 @@ void RobloxPlatform::writePathsToMap(SourceNode* node, const std::string& base, 
     {
         child->parent = node;
         writePathsToMap(child, base + "/" + child->name, childNameContext);
+
+#ifdef NEVERMORE_STRING_REQUIRE
+        if (child->className == "ModuleScript")
+            moduleNameToSourceNode.emplace(child->name, child);
+#endif
     }
+
+#ifdef NEVERMORE_STRING_REQUIRE
+    const bool hasLoader = std::any_of(node->children.begin(), node->children.end(), [](const SourceNode* child) {
+        return child->isScript() && child->name == "loader";
+    });
+    const bool hasScriptChild = std::any_of(node->children.begin(), node->children.end(), [](const SourceNode* child) {
+        return child->isScript();
+    });
+
+    if (hasScriptChild && !hasLoader)
+    {
+        SourceNode* loader = sourceNodeAllocator.allocate(SourceNode("loader", "ModuleScript", {}, {}, node->pluginManaged));
+        loader->parent = node;
+        loader->scriptContext = childNameContext;
+        loader->isVirtualNevermoreLoader = true;
+        node->children.push_back(loader);
+        writePathsToMap(loader, base + "/loader", childNameContext);
+    }
+#endif
 }
 
 void RobloxPlatform::rebuildPathMaps()
 {
     realPathsToSourceNodes.clear();
     virtualPathsToSourceNodes.clear();
+#ifdef NEVERMORE_STRING_REQUIRE
+    moduleNameToSourceNode.clear();
+#endif
     if (rootSourceNode)
         writePathsToMap(rootSourceNode, rootSourceNode->className == "DataModel" ? "game" : "ProjectRoot");
 }
@@ -523,6 +552,9 @@ void RobloxPlatform::updateSourceNodeMap(const std::string& sourceMapContents)
     sourceNodeAllocator.clear();
     realPathsToSourceNodes.clear();
     virtualPathsToSourceNodes.clear();
+#ifdef NEVERMORE_STRING_REQUIRE
+    moduleNameToSourceNode.clear();
+#endif
 
     try
     {
@@ -630,6 +662,11 @@ void RobloxPlatform::handleSourcemapUpdate(Luau::Frontend& frontend, const Luau:
             scope->bindings[Luau::AstName("workspace")] = Luau::Binding{globals.builtinTypes->anyType};
             scope->bindings[Luau::AstName("game")] = Luau::Binding{globals.builtinTypes->anyType};
         }
+
+#ifdef NEVERMORE_STRING_REQUIRE
+        if (auto node = isVirtualPath(name) ? getSourceNodeFromVirtualPath(name) : getSourceNodeFromRealPath(fileResolver->getUri(name)))
+            scope->bindings[Luau::AstName{"StringRequire"}] = Luau::Binding{getStringRequireType(globals, instanceTypes, node.value())};
+#endif
 
         if (expressiveTypes || forAutocomplete)
             if (auto node = isVirtualPath(name) ? getSourceNodeFromVirtualPath(name) : getSourceNodeFromRealPath(fileResolver->getUri(name)))
