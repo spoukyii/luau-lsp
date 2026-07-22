@@ -161,6 +161,9 @@ const SourceNode* SourceNode::walkPath(const std::string& path) const
 void SourceNode::clearCachedTypes() const
 {
     tys.clear();
+#ifdef NEVERMORE_STRING_REQUIRE
+    stringRequireTypes.clear();
+#endif
     for (const auto& child : children)
         child->clearCachedTypes();
 }

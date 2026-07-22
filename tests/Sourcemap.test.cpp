@@ -6,6 +6,54 @@
 
 TEST_SUITE_BEGIN("SourcemapTests");
 
+#ifdef NEVERMORE_STRING_REQUIRE
+TEST_CASE_FIXTURE(Fixture, "nevermore_string_require_resolves_exported_types_with_solver_v2")
+{
+    ENABLE_NEW_SOLVER();
+
+    loadSourcemap(R"(
+        {
+            "name": "game",
+            "className": "DataModel",
+            "children": [
+                {
+                    "name": "Packages",
+                    "className": "Folder",
+                    "children": [
+                        {
+                            "name": "Target",
+                            "className": "ModuleScript",
+                            "filePaths": ["Target.luau"]
+                        },
+                        {
+                            "name": "Consumer",
+                            "className": "ModuleScript",
+                            "filePaths": ["Consumer.luau"]
+                        }
+                    ]
+                }
+            ]
+        }
+    )");
+
+    newDocument("Target.luau", R"(
+        --!strict
+        export type Target = { value: number }
+        return { value = 1 }
+    )");
+    auto consumer = newDocument("Consumer.luau", R"(
+        --!strict
+        local require = require(script.Parent.loader).load(script)
+        local Target = require("Target")
+        local value: Target.Target = Target
+        return value
+    )");
+
+    auto result = workspace.frontend.check(workspace.fileResolver.getModuleName(consumer));
+    LUAU_LSP_REQUIRE_NO_ERRORS(result);
+}
+#endif
+
 TEST_CASE("getScriptFilePath")
 {
     SourceNode node("test", "ModuleScript", {"test.lua"}, {});

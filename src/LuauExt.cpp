@@ -805,7 +805,7 @@ bool isRequire(const Luau::AstExpr* expr)
             return true;
 
 #ifdef NEVERMORE_STRING_REQUIRE
-        if (const Luau::AstExprLocal* local = call->as<Luau::AstExprLocal>(); local && local->local->name == "require")
+        if (const Luau::AstExprLocal* local = call->func->as<Luau::AstExprLocal>(); local && local->local->name == "require")
         {
             return true;
         }

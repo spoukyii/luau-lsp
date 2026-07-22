@@ -32,9 +32,9 @@ struct MagicStringRequireLookup final : Luau::MagicFunction
 std::optional<Luau::WithPredicate<Luau::TypePackId>> MagicStringRequireLookup::handleOldSolver(
     Luau::TypeChecker& typeChecker, const Luau::ScopePtr& scope, const Luau::AstExprCall& expr, Luau::WithPredicate<Luau::TypePackId>)
 {
-    if (expr.args.size < 1)
+    if (expr.args.size != 1)
     {
-        typeChecker.reportError(Luau::TypeError{expr.args.data[0]->location, Luau::UnknownRequire{}});
+        typeChecker.reportError(Luau::TypeError{expr.location, Luau::GenericError{"Nevermore require takes 1 argument"}});
         return std::nullopt;
     }
 
@@ -68,15 +68,23 @@ std::optional<Luau::WithPredicate<Luau::TypePackId>> MagicStringRequireLookup::h
 
 bool MagicStringRequireLookup::infer(const Luau::MagicFunctionCallContext& context)
 {
-    // TODO: Actually like, do something here
-    if (context.callSite->args.size < 1)
+    if (context.callSite->args.size != 1)
+    {
+        context.solver->reportError(Luau::GenericError{"Nevermore require takes 1 argument"}, context.callSite->location);
         return false;
+    }
 
     auto str = context.callSite->args.data[0]->as<Luau::AstExprConstantString>();
     if (!str)
         return false;
 
     auto moduleName = std::string(str->value.data, str->value.size);
+    if (node->name == moduleName)
+    {
+        context.solver->reportError(Luau::UnknownRequire{moduleName}, context.callSite->args.data[0]->location);
+        return false;
+    }
+
     auto module = platform.findStringModule(moduleName);
     if (!module.has_value())
     {
@@ -85,12 +93,10 @@ bool MagicStringRequireLookup::infer(const Luau::MagicFunctionCallContext& conte
     }
 
 
-    Luau::ModuleInfo moduleInfo;
-    moduleInfo.name = module.value()->virtualPath;
-
-    asMutable(context.result)->ty.emplace<Luau::BoundTypePack>(context.solver->arena->addTypePack({
-        context.solver->resolveModule(moduleInfo, context.callSite->args.data[0]->location)
-    }));
+    Luau::ModuleInfo moduleInfo{module.value()->virtualPath};
+    Luau::TypeId moduleType = context.solver->resolveModule(moduleInfo, context.callSite->location);
+    Luau::TypePackId moduleResult = context.solver->arena->addTypePack({moduleType});
+    asMutable(context.result)->ty.emplace<Luau::BoundTypePack>(moduleResult);
 
     return true;
 }
@@ -175,7 +181,7 @@ std::optional<std::string> RobloxPlatform::resolveToVirtualSourceCode(const Luau
 
 local loader = {}
 
-function loader.load(thisScript: ModuleScript): typeof(StringRequire)
+function loader.load(thisScript: any): typeof(StringRequire)
     return nil :: never
 end
 

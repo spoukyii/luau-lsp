@@ -41,6 +41,11 @@ std::vector<InstanceRequireResult> computeAllInstanceRequires(const InstanceRequ
 
     for (auto& [path, node] : ctx.platform->virtualPathsToSourceNodes)
     {
+#ifdef NEVERMORE_STRING_REQUIRE
+        if (node->isVirtualNevermoreLoader)
+            continue;
+#endif
+
         auto name = AutoImports::makeValidVariableName(node->name);
 
         if (ctx.moduleFilter && !(*ctx.moduleFilter)(name))
