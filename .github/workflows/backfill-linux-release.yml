@@ -1,0 +1,47 @@
+name: Backfill Linux Release Asset
+
+# Builds the Linux x86_64 CLI for an existing release tag and attaches it to
+# that release, so aftman can install the pinned fork on Linux runners. The
+# build steps mirror the dist job in release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build and attach the asset to"
+        required: true
+        default: "1.69.0-nevermore.2"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          submodules: recursive
+
+      - name: Build Server
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DLSP_STATIC_CRT:BOOL=ON -DLSP_BUILD_WITH_SENTRY:BOOL=OFF
+          cmake --build . --config RelWithDebInfo --target Luau.LanguageServer.CLI -j 3
+
+      - name: Strip debug symbols
+        run: objcopy --strip-debug build/luau-lsp
+
+      - name: Verify version output
+        run: ./build/luau-lsp --version
+
+      - name: Package
+        run: |
+          chmod +x build/luau-lsp
+          cd build && zip ../luau-lsp-linux-x86_64.zip luau-lsp
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" luau-lsp-linux-x86_64.zip --clobber --repo "${{ github.repository }}"
