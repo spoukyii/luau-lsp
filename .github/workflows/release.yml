@@ -70,11 +70,11 @@ jobs:
             artifact-name: luau-lsp-win64
             code-target: [win32-x64, win32-arm64]
             crash-reporting: false
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             artifact-name: luau-lsp-linux-x86_64
             code-target: [linux-x64]
             crash-reporting: false
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm
             artifact-name: luau-lsp-linux-arm64
             code-target: [linux-arm64]
             crash-reporting: false
@@ -111,7 +111,7 @@ jobs:
         run: dsymutil build/luau-lsp && strip -S build/luau-lsp
 
       - name: (Linux) Separate debug symbols
-        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: objcopy --only-keep-debug build/luau-lsp build/luau-lsp.dbg && objcopy --strip-debug build/luau-lsp
 
       - name: Copy Build into Extension
